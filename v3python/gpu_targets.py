@@ -104,21 +104,17 @@ def main():
     import argparse
     import sys
     p = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    arch_metavar = '{' + ','.join(AOTRITON_ARCH_WARPSIZE.keys()) + '}'
+    supported_archs = sorted({gpu2arch(g) for g in AOTRITON_SUPPORTED_GPUS})
+    arch_metavar = '{' + ','.join(supported_archs) + '}'
     p.add_argument("--target_arch", type=str, default=None, nargs='*', metavar=arch_metavar,
-                   help="Select architectures and related GPU tuning information. Unsupported ones will be ignored.")
+                   help="Select architectures. Unsupported entries are dropped; if none remain the script errors.")
     p.add_argument("--target_gpus", type=str, default=None, nargs='*', choices=AOTRITON_SUPPORTED_GPUS,
                    help="Select specific list of GPUs. Overrides --target_arch.")
     args = p.parse_args()
     gpus = select_gpus(args.target_arch, args.target_gpus)
     if not gpus:
-        # Derive the "supported" arch list from AOTRITON_SUPPORTED_GPUS rather
-        # than AOTRITON_ARCH_WARPSIZE — the warpsize map can list archs (e.g.
-        # gfx1251) that don't yet have an _mod0 GPU entry, which would mislead
-        # users into requesting them and hitting this same empty-result path.
-        supported = sorted({gpu2arch(g) for g in AOTRITON_SUPPORTED_GPUS})
         requested = list(args.target_gpus or args.target_arch or [])
-        unsupported = [a for a in (args.target_arch or []) if a not in supported]
+        unsupported = [a for a in (args.target_arch or []) if a not in supported_archs]
         # PyTorch's PYTORCH_ROCM_ARCH commonly uses comma separators that
         # leak through as a single token like "gfx942,gfx950"; CMake then
         # forwards it as one --target_arch argument and our filter drops
@@ -143,7 +139,7 @@ def main():
             "aotriton: no supported target arch in input list\n"
             f"  requested: {', '.join(requested) if requested else '(none)'}\n"
             f"  unsupported (filtered out): {', '.join(unsupported) if unsupported else '(none)'}\n"
-            f"  supported: {', '.join(supported)}\n"
+            f"  supported: {', '.join(supported_archs)}\n"
             + "\n".join(hint_lines),
             file=sys.stderr,
         )
